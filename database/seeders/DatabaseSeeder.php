@@ -11,9 +11,24 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        //Tickers
+        $this->call([
+            TickerSeeder::class,
+        ]);  
+       
         // Call UserSeeder
         $this->call([
             UserSeeder::class,
         ]);
+
+        // Add deposits
+        $this->call([
+            UserDepositSeeder::class,
+        ]);
+
+        //Assets
+        $this->call([
+            AssetSeeder::class,
+        ]);        
     }
 }

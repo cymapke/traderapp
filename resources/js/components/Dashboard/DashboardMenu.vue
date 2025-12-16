@@ -21,6 +21,20 @@
                 </router-link>
             </li>
 
+            <!-- Funds Menu Item -->
+            <li class="menu-item">
+                <router-link 
+                    :to="{ name: 'dashboard.funds' }" 
+                    class="menu-link"
+                    :class="{ active: $route.name === 'dashboard.funds' }"
+                >
+                    <span class="menu-icon">
+                        <i class="menu-icon-fas fas fa-money"></i>
+                    </span>
+                    <span class="menu-text">Funds</span>
+                </router-link>
+            </li>       
+
             <!-- Orders Menu Item -->
             <li class="menu-item">
                 <router-link 
