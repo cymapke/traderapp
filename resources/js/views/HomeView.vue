@@ -10,16 +10,12 @@
 
                 <!-- Navigation Buttons -->
                 <div class="nav-buttons">
-                    <a href="/login">
-                        <button class="login-button">
-                            Log in
-                        </button>
-                    </a>
-                    <a href="/register">
-                        <button class="signup-button">
-                            Sign up
-                        </button>
-                    </a>
+                    <router-link :to="{ name: 'login' }" class="login-button">
+                        Log in
+                    </router-link>
+                    <router-link :to="{ name: 'register' }" class="signup-button">
+                        Sign up
+                    </router-link>
                 </div>
             </div>
         </header>

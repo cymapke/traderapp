@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import laravel from 'laravel-vite-plugin';
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import laravel from 'laravel-vite-plugin'
 
 export default defineConfig({
     plugins: [
@@ -22,4 +22,14 @@ export default defineConfig({
             '@': '/resources/js',
         },
     },
-});
+    server: {
+        proxy: {
+            '/api': {
+                target: 'http://localhost:8000',
+                changeOrigin: true,
+                secure: false,
+                rewrite: (path) => path.replace(/^\/api/, '/api')
+            }
+        }
+    }
+})

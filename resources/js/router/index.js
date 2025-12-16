@@ -1,7 +1,5 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import HomeView from '../views/HomeView.vue';
-import LoginView from '../views/LoginView.vue';
-import RegisterView from '../views/RegisterView.vue';
+import { createRouter, createWebHistory } from 'vue-router'
+import { authGuard } from './guard.ts'
 
 const router = createRouter({
     history: createWebHistory(),
@@ -9,19 +7,31 @@ const router = createRouter({
         {
             path: '/',
             name: 'home',
-            component: HomeView
+            component: () => import('@/views/HomeView.vue'),
+            meta: { requiresGuest: false } // Public route
         },
         {
             path: '/login',
             name: 'login',
-            component: LoginView
+            component: () => import('@/views/LoginView.vue'),
+            meta: { requiresGuest: true } // Only for non-logged in users
         },
         {
             path: '/register',
             name: 'register',
-            component: RegisterView
+            component: () => import('@/views/RegisterView.vue'),
+            meta: { requiresGuest: true } // Only for non-logged in users
+        },
+        {
+            path: '/dashboard',
+            name: 'dashboard',
+            component: () => import('@/views/DashboardView.vue'),
+            meta: { requiresAuth: true } // Requires authentication
         }
     ]
-});
+})
 
-export default router;
+// Apply the guard to all routes
+router.beforeEach(authGuard)
+
+export default router

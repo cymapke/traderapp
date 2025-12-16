@@ -155,7 +155,7 @@ const handleSubmit = async () => {
     await new Promise(resolve => setTimeout(resolve, 1500));
     
     // For demo purposes, just redirect to home
-    router.push({ name: 'home' });
+    router.push({ name: 'dashboard' });
     
     loading.value = false;
 };
