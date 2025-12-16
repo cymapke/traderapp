@@ -163,9 +163,9 @@ if (!isAuthenticated.value) {
 /* Main Widget Styles */
 .main-widget {
     flex: 1;
-    background: white;
-    padding: 32px;
+    padding: 24px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 /* Footer Styles */
@@ -187,6 +187,11 @@ if (!isAuthenticated.value) {
     color: #6b7280;
     font-size: 13px;
     font-weight: 500;
+}
+
+.widget-container {
+    height: 100%;
+    width: 100%;
 }
 
 /* Responsive Design */
