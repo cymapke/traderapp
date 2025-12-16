@@ -8,30 +8,43 @@ const router = createRouter({
             path: '/',
             name: 'home',
             component: () => import('@/views/HomeView.vue'),
-            meta: { requiresGuest: false } // Public route
+            meta: { requiresGuest: false }
         },
         {
             path: '/login',
             name: 'login',
             component: () => import('@/views/LoginView.vue'),
-            meta: { requiresGuest: true } // Only for non-logged in users
+            meta: { requiresGuest: true }
         },
         {
             path: '/register',
             name: 'register',
             component: () => import('@/views/RegisterView.vue'),
-            meta: { requiresGuest: true } // Only for non-logged in users
+            meta: { requiresGuest: true }
         },
         {
             path: '/dashboard',
             name: 'dashboard',
             component: () => import('@/views/DashboardView.vue'),
-            meta: { requiresAuth: true } // Requires authentication
+            meta: { requiresAuth: true },
+            redirect: { name: 'dashboard.overview' },
+            children: [
+                {
+                    path: 'overview',
+                    name: 'dashboard.overview',
+                    component: () => import('@/views/dashboard/OverviewView.vue')
+                },
+                {
+                    path: 'orders',
+                    name: 'dashboard.orders',
+                    component: () => import('@/views/dashboard/OrdersView.vue')
+                }
+            ]
         }
     ]
 })
 
-// Apply the guard to all routes
+// Apply route guards
 router.beforeEach(authGuard)
 
 export default router

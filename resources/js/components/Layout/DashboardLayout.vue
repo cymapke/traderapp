@@ -1,100 +1,154 @@
-
 <template>
     <div class="dashboard-layout">
-        <!-- Header (Common for dashboard) -->
-        <header class="dashboard-header">
-            <div class="header-content">
-                <!-- Logo -->
-                <div class="logo">
-                    TraderApp
-                </div>
-
-                <!-- User Profile -->
-                <div class="user-profile">
-                    <div class="user-info">
-                        <span class="user-name">{{ user.name }}</span>
-                        <span class="user-email">{{ user.email }}</span>
-                    </div>
-                    <div class="user-avatar">
-                        {{ user.initials }}
-                    </div>
-                </div>
-            </div>
-        </header>
-
-        <!-- Main Content Area with Sidebar -->
-        <div class="dashboard-content">
-            <!-- Left Sidebar Menu -->
-            <aside class="sidebar">
-                <DashboardMenu />
-            </aside>
-
-            <!-- Main Content Widget -->
-            <main class="main-widget">
-                <slot></slot>
-            </main>
+        <!-- Loading state while auth store initializes -->
+        <div v-if="!authStore" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Initializing...</p>
         </div>
+        
+        <!-- Loading authentication -->
+        <div v-else-if="authStore.isLoading" class="loading-container">
+            <div class="loading-spinner"></div>
+            <p>Loading dashboard...</p>
+        </div>
+        
+        <!-- Authenticated content -->
+        <div v-else-if="authStore.isAuthenticated" class="authenticated-layout">
+            <!-- Header -->
+            <header class="dashboard-header">
+                <div class="header-content">
+                    <router-link :to="{ name: 'dashboard.overview' }" class="logo">
+                        TraderApp
+                    </router-link>
 
-        <!-- Footer -->
-        <footer class="dashboard-footer">
-            <div class="footer-content">
-                <p class="copyright">
-                    © {{ currentYear }} TraderApp. All rights reserved.
-                </p>
+                    <div class="user-profile">
+                        <div class="user-info">
+                            <span class="user-name">{{ authStore.user?.name }}</span>
+                            <span class="user-email">{{ authStore.user?.email }}</span>
+                        </div>
+                        <div class="user-avatar">
+                            {{ authStore.userInitials }}
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Main Content Area -->
+            <div class="dashboard-content">
+                <!-- Sidebar -->
+                <aside class="sidebar">
+                    <DashboardMenu v-if="authStore.isAuthenticated" />
+                </aside>
+
+                <!-- Main Content Widget -->
+                <main class="main-widget scroll-container">
+                    <router-view v-slot="{ Component }">
+                        <transition name="fade" mode="out-in">
+                            <component :is="Component" />
+                        </transition>
+                    </router-view>
+                </main>
             </div>
-        </footer>
+
+            <!-- Footer -->
+            <footer class="dashboard-footer">
+                <div class="footer-content">
+                    <p class="copyright">
+                        © {{ currentYear }} TraderApp. All rights reserved.
+                    </p>
+                </div>
+            </footer>
+        </div>
+        
+        <!-- Unauthorized -->
+        <div v-else class="unauthorized-container">
+            <h2>Access Denied</h2>
+            <p>You need to be logged in to access this page.</p>
+            <router-link to="/login" class="login-link">
+                Go to Login
+            </router-link>
+        </div>
     </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { useRouter } from 'vue-router';
-import DashboardMenu from '@/components/Dashboard/DashboardMenu.vue';
+import { ref, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
+import DashboardMenu from '@/components/Dashboard/DashboardMenu.vue'
 
-const router = useRouter();
-const currentYear = ref(new Date().getFullYear());
+const router = useRouter()
+const route = useRoute()
 
-// Mock user data - in real app, this would come from auth store
-const user = ref({
-    name: 'John Trader',
-    email: 'john@traderapp.com',
-    initials: 'JT'
-});
+// Initialize auth store - use computed to ensure reactivity
+const authStore = computed(() => {
+    try {
+        return useAuthStore()
+    } catch (error) {
+        console.error('Failed to initialize auth store:', error)
+        return null
+    }
+})
 
-// Check if user is authenticated (mock for now)
-const isAuthenticated = ref(true);
+const currentYear = ref(new Date().getFullYear())
 
-// If not authenticated, redirect to login
-if (!isAuthenticated.value) {
-    router.push({ name: 'login' });
-}
+onMounted(() => {
+    console.log('📊 DashboardLayout mounted')
+    
+    if (authStore.value) {
+        // Check if user is authenticated
+        if (!authStore.value.isAuthenticated) {
+            console.log('📊 Not authenticated, redirecting to login')
+            router.push({ name: 'login' })
+        }
+    }
+})
 </script>
 
 <style scoped>
-/* Dashboard Layout Container */
-.dashboard-layout {
-    min-height: 100vh;
-    background-color: white;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    display: flex;
-    flex-direction: column;
+/* Add transition for route changes */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.2s ease;
 }
 
-/* Header Styles */
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+}
+
+.dashboard-layout {
+    height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+}
+
+.authenticated-layout {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    overflow: hidden;
+}
+
+/* Header - Fixed height */
 .dashboard-header {
-    padding: 16px 32px;
+    height: 64px;
+    min-height: 64px;
+    padding: 0 32px;
     border-bottom: 1px solid #e5e7eb;
     background: white;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-    height: 64px;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
+    z-index: 10;
 }
 
 .header-content {
     width: 100%;
-    max-width: 100%;
-    margin: 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -106,6 +160,11 @@ if (!isAuthenticated.value) {
     color: #482e92;
     letter-spacing: -0.5px;
     font-family: 'Inter', system-ui, sans-serif;
+    text-decoration: none;
+}
+
+.logo:hover {
+    opacity: 0.9;
 }
 
 /* User Profile */
@@ -149,33 +208,42 @@ if (!isAuthenticated.value) {
 .dashboard-content {
     display: flex;
     flex: 1;
-    min-height: calc(100vh - 124px); /* Subtract header and footer height */
+    min-height: 0; /* Important for flex children */
+    overflow: hidden;
 }
 
 /* Sidebar Styles */
 .sidebar {
     width: 240px;
+    min-width: 240px;
     background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
     border-right: 1px solid #e5e7eb;
-    padding: 24px 0;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
 }
 
 /* Main Widget Styles */
 .main-widget {
     flex: 1;
-    padding: 24px;
+    background: white;
+    padding: 32px;
     overflow-y: auto;
     overflow-x: hidden;
+    min-width: 0; /* Important for flex children */
 }
 
 /* Footer Styles */
 .dashboard-footer {
-    background: #f9fafb;
-    padding: 16px 32px;
-    border-top: 1px solid #e5e7eb;
     height: 60px;
+    min-height: 60px;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
+    z-index: 10;
 }
 
 .footer-content {
@@ -189,15 +257,68 @@ if (!isAuthenticated.value) {
     font-weight: 500;
 }
 
-.widget-container {
-    height: 100%;
-    width: 100%;
+/* Loading and Unauthorized containers */
+.loading-container,
+.unauthorized-container {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #482e92;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.unauthorized-container h2 {
+    color: #dc2626;
+    margin-bottom: 12px;
+}
+
+.unauthorized-container p {
+    color: #6b7280;
+    margin-bottom: 20px;
+}
+
+.login-link {
+    padding: 10px 24px;
+    background: #482e92;
+    color: white;
+    text-decoration: none;
+    border-radius: 6px;
+    font-weight: 500;
+}
+
+.login-link:hover {
+    background: #5b3ea8;
 }
 
 /* Responsive Design */
 @media (max-width: 1024px) {
     .sidebar {
         width: 200px;
+        min-width: 200px;
     }
     
     .main-widget {
@@ -207,7 +328,9 @@ if (!isAuthenticated.value) {
 
 @media (max-width: 768px) {
     .dashboard-header {
-        padding: 16px 20px;
+        padding: 0 20px;
+        height: 56px;
+        min-height: 56px;
     }
     
     .user-info {
@@ -216,11 +339,16 @@ if (!isAuthenticated.value) {
     
     .sidebar {
         width: 180px;
-        padding: 20px 0;
+        min-width: 180px;
     }
     
     .main-widget {
         padding: 20px;
+    }
+    
+    .dashboard-footer {
+        height: 48px;
+        min-height: 48px;
     }
 }
 
@@ -231,13 +359,14 @@ if (!isAuthenticated.value) {
     
     .sidebar {
         width: 100%;
+        min-width: 100%;
+        height: auto;
         border-right: none;
         border-bottom: 1px solid #e5e7eb;
-        padding: 16px 0;
     }
     
     .main-widget {
-        min-height: auto;
+        height: calc(100vh - 124px); /* Adjust for header + footer + sidebar */
     }
 }
 </style>

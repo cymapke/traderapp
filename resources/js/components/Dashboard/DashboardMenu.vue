@@ -6,25 +6,33 @@
         </div>
 
         <!-- Menu Items -->
-        <ul class="menu-items">
+        <ul class="menu-items scroll-container">
             <!-- Overview Menu Item -->
             <li class="menu-item">
-                <a href="#" class="menu-link" @click.prevent="onOverviewClick">
+                <router-link 
+                    :to="{ name: 'dashboard.overview' }" 
+                    class="menu-link"
+                    :class="{ active: $route.name === 'dashboard.overview' }"
+                >
                     <span class="menu-icon">
                         <i class="menu-icon-fas fas fa-chart-line"></i>
                     </span>
                     <span class="menu-text">Overview</span>
-                </a>
+                </router-link>
             </li>
 
             <!-- Orders Menu Item -->
             <li class="menu-item">
-                <a href="#" class="menu-link" @click.prevent="onOrdersClick">
+                <router-link 
+                    :to="{ name: 'dashboard.orders' }" 
+                    class="menu-link"
+                    :class="{ active: $route.name === 'dashboard.orders' }"
+                >
                     <span class="menu-icon">
                         <i class="menu-icon-fas fas fa-clipboard-list"></i>
                     </span>
                     <span class="menu-text">Orders</span>
-                </a>
+                </router-link>
             </li>
 
             <!-- Divider -->
@@ -49,27 +57,18 @@
 </template>
 
 <script setup>
-import { useAuthStore } from '@/stores/auth'
+import { useSafeAuthStore } from '@/utils/store'
 import { useRouter } from 'vue-router'
 
-const authStore = useAuthStore()
+const authStore = useSafeAuthStore()
 const router = useRouter()
 
-const onOverviewClick = () => {
-    console.log('Overview clicked - to be implemented')
-    // Will be implemented later
-}
-
-const onOrdersClick = () => {
-    console.log('Orders clicked - to be implemented')
-    // Will be implemented later
-}
-
 const onLogoutClick = async () => {
+    if (!authStore) return
+    
     console.log('Log out clicked')
     try {
         await authStore.logout()
-        // Router push happens in the auth store
     } catch (error) {
         console.error('Logout error:', error)
     }
@@ -133,8 +132,18 @@ const onLogoutClick = async () => {
     color: #111827;
 }
 
-.menu-link:active {
-    background-color: #e5e7eb;
+/* Add active state for router links */
+.menu-link.active {
+    background: #482e92;
+    color: white;
+}
+
+.menu-link.active .menu-icon-fas {
+    color: white;
+}
+
+.menu-link.active:hover {
+    background: #5b3ea8;
 }
 
 /* Font Awesome Icons */
