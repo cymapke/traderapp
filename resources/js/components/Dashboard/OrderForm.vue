@@ -8,15 +8,18 @@
             <p class="form-subtitle">Execute buy or sell orders for your preferred assets</p>
         </div>
 
-        <!-- Quick Tickers -->
+        <!-- Quick Symbols - Shows top 6 popular for BUY or user's sellable holdings for SELL -->
         <div class="quick-tickers">
             <button 
-                v-for="ticker in quickTickers" 
-                :key="ticker"
-                :class="['ticker-btn', { active: form.symbol === ticker }]"
-                @click="form.symbol = ticker"
+                v-for="symbol in quickSymbols" 
+                :key="symbol.symbol"
+                :class="['ticker-btn', { active: form.symbol === symbol.symbol }]"
+                @click="selectQuickSymbol(symbol)"
             >
-                {{ ticker }}
+                <span class="symbol">{{ symbol.symbol }}</span>
+                <span v-if="form.type === 'sell'" class="holding-amount">
+                    ({{ formatAmount(symbol.available) }})
+                </span>
             </button>
         </div>
 
@@ -30,12 +33,27 @@
                         type="text"
                         v-model="form.symbol"
                         class="form-input"
-                        placeholder="e.g., BTC/USD, AAPL"
+                        placeholder="Search symbol..."
+                        @input="searchSymbols"
                         required
                     />
-                    <button type="button" class="search-btn" @click="searchSymbol">
+                    <button type="button" class="search-btn" @click="searchSymbols">
                         <i class="fas fa-search"></i>
                     </button>
+                </div>
+                <!-- Search Results Dropdown -->
+                <div v-if="showSymbolDropdown && filteredSymbols.length > 0" class="symbol-dropdown">
+                    <div 
+                        v-for="symbol in filteredSymbols" 
+                        :key="symbol.symbol"
+                        class="dropdown-item"
+                        @click="selectSymbol(symbol)"
+                    >
+                        <span class="symbol">{{ symbol.symbol }}</span>
+                        <span v-if="form.type === 'sell'" class="available">
+                            Available: {{ formatAmount(symbol.available) }}
+                        </span>
+                    </div>
                 </div>
             </div>
 
@@ -45,16 +63,16 @@
                 <div class="order-type-selector">
                     <button
                         type="button"
-                        :class="['type-btn', { active: form.type === 'buy' }]"
-                        @click="form.type = 'buy'"
+                        :class="['type-btn', 'buy-btn', { active: form.type === 'buy' }]"
+                        @click="setOrderType('buy')"
                     >
                         <i class="fas fa-arrow-up"></i>
                         Buy
                     </button>
                     <button
                         type="button"
-                        :class="['type-btn', { active: form.type === 'sell' }]"
-                        @click="form.type = 'sell'"
+                        :class="['type-btn', 'sell-btn', { active: form.type === 'sell' }]"
+                        @click="setOrderType('sell')"
                     >
                         <i class="fas fa-arrow-down"></i>
                         Sell
@@ -66,16 +84,22 @@
             <div class="form-row">
                 <!-- Quantity -->
                 <div class="form-group">
-                    <label class="form-label">Quantity</label>
+                    <label class="form-label">
+                        Quantity
+                        <span v-if="form.type === 'sell' && selectedSymbolData" class="available-label">
+                            Available: {{ formatAmount(selectedSymbolData.available) }}
+                        </span>
+                    </label>
                     <div class="input-with-buttons">
                         <input
                             type="number"
                             v-model="form.quantity"
                             class="form-input"
-                            placeholder="0.00"
-                            step="0.01"
+                            :placeholder="`0.${'0'.repeat(form.type === 'buy' ? 8 : 18)}`"
+                            :step="form.type === 'buy' ? '0.00000001' : '0.000000000000000001'"
                             min="0"
                             required
+                            @input="validateQuantity"
                         />
                         <div class="quantity-buttons">
                             <button type="button" class="qty-btn" @click="adjustQuantity(0.1)">+0.1</button>
@@ -83,14 +107,18 @@
                             <button type="button" class="qty-btn" @click="adjustQuantity(10)">+10</button>
                         </div>
                     </div>
+                    <div v-if="quantityError" class="error-message">
+                        <i class="fas fa-exclamation-circle"></i>
+                        {{ quantityError }}
+                    </div>
                 </div>
 
                 <!-- Price -->
                 <div class="form-group">
                     <label class="form-label">
-                        Price
+                        Price (USD)
                         <span class="market-price" v-if="marketPrice">
-                            Market: ${{ marketPrice.toLocaleString() }}
+                            Market: ${{ formatPrice(marketPrice) }}
                         </span>
                     </label>
                     <input
@@ -108,53 +136,16 @@
             <!-- Order Summary -->
             <div class="order-summary">
                 <div class="summary-item">
-                    <span class="summary-label">Total Cost</span>
-                    <span class="summary-value">${{ totalCost.toLocaleString() }}</span>
+                    <span class="summary-label">Order Value</span>
+                    <span class="summary-value">${{ formatPrice(orderValue) }}</span>
                 </div>
                 <div class="summary-item">
-                    <span class="summary-label">Available Balance</span>
-                    <span class="summary-value">${{ availableBalance.toLocaleString() }}</span>
+                    <span class="summary-label">Fee (1.5%)</span>
+                    <span class="summary-value">${{ formatPrice(orderFee) }}</span>
                 </div>
-                <div class="summary-item">
-                    <span class="summary-label">Estimated Fee</span>
-                    <span class="summary-value">${{ estimatedFee.toLocaleString() }}</span>
-                </div>
-            </div>
-
-            <!-- Advanced Options -->
-            <div class="advanced-options">
-                <button type="button" class="advanced-toggle" @click="showAdvanced = !showAdvanced">
-                    <i class="fas" :class="showAdvanced ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
-                    Advanced Options
-                </button>
-                
-                <div v-if="showAdvanced" class="advanced-content">
-                    <div class="form-group">
-                        <label class="form-label">Order Type</label>
-                        <select v-model="form.orderType" class="form-select">
-                            <option value="market">Market Order</option>
-                            <option value="limit">Limit Order</option>
-                            <option value="stop">Stop Order</option>
-                            <option value="stop_limit">Stop-Limit Order</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Time in Force</label>
-                        <select v-model="form.timeInForce" class="form-select">
-                            <option value="day">Day</option>
-                            <option value="gtc">Good Till Cancelled</option>
-                            <option value="ioc">Immediate or Cancel</option>
-                            <option value="fok">Fill or Kill</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" v-model="form.postOnly" class="checkbox" />
-                            <span>Post Only</span>
-                        </label>
-                    </div>
+                <div class="summary-item total">
+                    <span class="summary-label">Total {{ form.type === 'buy' ? 'Cost' : 'Receive' }}</span>
+                    <span class="summary-value">${{ formatPrice(totalAmount) }}</span>
                 </div>
             </div>
 
@@ -179,75 +170,313 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import axios from 'axios'
 
-// Quick ticker buttons
-const quickTickers = ref(['BTC/USD', 'ETH/USD', 'AAPL', 'TSLA', 'MSFT', 'GOOGL'])
+// Define all available symbols
+const allSymbols = [
+    'BTC',   // Bitcoin
+    'ETH',   // Ethereum
+    'XRP',   // Ripple
+    'BNB',   // Binance Coin
+    'ADA',   // Cardano
+    'SOL',   // Solana
+    'DOT',   // Polkadot
+    'DOGE',  // Dogecoin
+    'AVAX',  // Avalanche
+    'LTC',   // Litecoin
+    'MATIC', // Polygon
+    'ATOM',  // Cosmos
+    'LINK',  // Chainlink
+    'UNI',   // Uniswap
+    'XLM',   // Stellar
+    'ETC',   // Ethereum Classic
+    'ALGO',  // Algorand
+    'VET',   // VeChain
+    'XTZ',   // Tezos
+    'FIL',   // Filecoin
+]
+
+// Popular symbols (top 6 for BUY)
+const popularSymbols = ['BTC', 'ETH', 'SOL', 'ADA', 'DOT', 'XRP']
 
 // Form state
 const form = reactive({
-    symbol: 'BTC/USD',
+    symbol: 'BTC',
     type: 'buy',
     quantity: 0.1,
     price: 42580,
-    orderType: 'limit',
-    timeInForce: 'gtc',
-    postOnly: false
 })
 
 // UI state
-const showAdvanced = ref(false)
 const isSubmitting = ref(false)
 const orderStatus = ref(null)
+const showSymbolDropdown = ref(false)
+const quantityError = ref('')
 
-// Market data (mock)
+// Data
 const marketPrice = ref(42580)
 const availableBalance = ref(18425.50)
+const userHoldings = ref([]) // Will be populated from API
+const filteredSymbols = ref([])
 
-// Computed values
-const totalCost = computed(() => {
+// Computed properties
+const quickSymbols = computed(() => {
+    if (form.type === 'buy') {
+        // Return top 6 popular symbols with mock market prices
+        return popularSymbols.map(symbol => ({
+            symbol,
+            name: getSymbolName(symbol),
+            price: getMockPrice(symbol),
+            available: 0 // Not applicable for buy
+        }))
+    } else {
+        // Return user's sellable holdings (filtered where available > 0)
+        const sellableHoldings = userHoldings.value
+            .filter(h => h.available > 0)
+            .sort((a, b) => b.value - a.value) // Sort by value descending
+            .slice(0, 6) // Take top 6
+        
+        return sellableHoldings.map(h => ({
+            symbol: h.symbol,
+            name: getSymbolName(h.symbol),
+            price: h.current_price,
+            available: h.available
+        }))
+    }
+})
+
+const selectedSymbolData = computed(() => {
+    if (form.type === 'buy') {
+        return quickSymbols.value.find(s => s.symbol === form.symbol) || null
+    } else {
+        return userHoldings.value.find(h => h.symbol === form.symbol) || null
+    }
+})
+
+const orderValue = computed(() => {
     return (form.quantity * form.price) || 0
 })
 
-const estimatedFee = computed(() => {
-    // 0.1% trading fee
-    return totalCost.value * 0.001
+const orderFee = computed(() => {
+    return orderValue.value * 0.015 // 1.5% fee
+})
+
+const totalAmount = computed(() => {
+    if (form.type === 'buy') {
+        return orderValue.value + orderFee.value
+    } else {
+        return orderValue.value - orderFee.value
+    }
 })
 
 const isFormValid = computed(() => {
-    return form.symbol && 
-           form.quantity > 0 && 
-           form.price > 0 && 
-           totalCost.value <= availableBalance.value
+    const hasSymbol = form.symbol && form.symbol.trim() !== ''
+    const hasValidQuantity = form.quantity > 0 && !quantityError.value
+    const hasValidPrice = form.price > 0
+    
+    if (form.type === 'buy') {
+        // For buy: total amount must be <= available balance
+        return hasSymbol && hasValidQuantity && hasValidPrice && totalAmount.value <= availableBalance.value
+    } else {
+        // For sell: quantity must be <= available amount
+        const symbolData = selectedSymbolData.value
+        return hasSymbol && hasValidQuantity && hasValidPrice && 
+               symbolData && form.quantity <= symbolData.available
+    }
 })
 
 // Methods
-const adjustQuantity = (amount) => {
-    form.quantity = parseFloat((form.quantity + amount).toFixed(2))
+const getSymbolName = (symbol) => {
+    const names = {
+        'BTC': 'Bitcoin',
+        'ETH': 'Ethereum',
+        'XRP': 'Ripple',
+        'BNB': 'Binance Coin',
+        'ADA': 'Cardano',
+        'SOL': 'Solana',
+        'DOT': 'Polkadot',
+        'DOGE': 'Dogecoin',
+        'AVAX': 'Avalanche',
+        'LTC': 'Litecoin',
+        'MATIC': 'Polygon',
+        'ATOM': 'Cosmos',
+        'LINK': 'Chainlink',
+        'UNI': 'Uniswap',
+        'XLM': 'Stellar',
+        'ETC': 'Ethereum Classic',
+        'ALGO': 'Algorand',
+        'VET': 'VeChain',
+        'XTZ': 'Tezos',
+        'FIL': 'Filecoin'
+    }
+    return names[symbol] || symbol
 }
 
-const searchSymbol = () => {
-    // Mock symbol search
-    if (form.symbol) {
-        const symbol = form.symbol.toUpperCase()
-        // Mock market price based on symbol
-        const mockPrices = {
-            'BTC/USD': 42580,
-            'ETH/USD': 2150,
-            'AAPL': 182.45,
-            'TSLA': 210.75,
-            'MSFT': 385.20,
-            'GOOGL': 142.80
-        }
-        
-        if (mockPrices[symbol]) {
-            form.price = mockPrices[symbol]
-            marketPrice.value = mockPrices[symbol]
-            showStatus('success', 'Symbol found and price updated')
-        } else {
-            showStatus('error', 'Symbol not found. Using default price.')
+const getMockPrice = (symbol) => {
+    const prices = {
+        'BTC': 42580,
+        'ETH': 2150,
+        'XRP': 0.62,
+        'BNB': 320,
+        'ADA': 0.52,
+        'SOL': 98,
+        'DOT': 7.25,
+        'DOGE': 0.15,
+        'AVAX': 42,
+        'LTC': 85,
+        'MATIC': 0.85,
+        'ATOM': 12,
+        'LINK': 16,
+        'UNI': 7.5,
+        'XLM': 0.13,
+        'ETC': 28,
+        'ALGO': 0.18,
+        'VET': 0.03,
+        'XTZ': 1.05,
+        'FIL': 5.8
+    }
+    return prices[symbol] || 100
+}
+
+const fetchUserHoldings = async () => {
+    try {
+        const response = await axios.get('/api/user/holdings')
+        userHoldings.value = response.data.holdings || []
+    } catch (error) {
+        console.error('Error fetching user holdings:', error)
+        // Mock data for development
+        userHoldings.value = [
+            { symbol: 'BTC', available: 0.5, current_price: 42580, value: 21290 },
+            { symbol: 'ETH', available: 2.5, current_price: 2150, value: 5375 },
+            { symbol: 'SOL', available: 15, current_price: 98, value: 1470 },
+            { symbol: 'ADA', available: 1000, current_price: 0.52, value: 520 },
+            { symbol: 'DOT', available: 50, current_price: 7.25, value: 362.5 },
+            { symbol: 'XRP', available: 500, current_price: 0.62, value: 310 },
+        ]
+    }
+}
+
+const fetchAvailableBalance = async () => {
+    try {
+        const response = await axios.get('/api/user/balance')
+        availableBalance.value = response.data.available_balance || 18425.50
+    } catch (error) {
+        console.error('Error fetching balance:', error)
+        // Use default value
+    }
+}
+
+const setOrderType = (type) => {
+    form.type = type
+    form.symbol = '' // Clear symbol when switching type
+    form.quantity = 0.1
+    quantityError.value = ''
+    updateMarketPrice()
+}
+
+const selectQuickSymbol = (symbol) => {
+    form.symbol = symbol.symbol
+    form.price = symbol.price
+    marketPrice.value = symbol.price
+    showSymbolDropdown.value = false
+    validateQuantity()
+}
+
+const searchSymbols = () => {
+    const searchTerm = form.symbol.toLowerCase().trim()
+    
+    if (!searchTerm) {
+        filteredSymbols.value = []
+        showSymbolDropdown.value = false
+        return
+    }
+    
+    if (form.type === 'buy') {
+        // For buy: show all symbols that match search
+        filteredSymbols.value = allSymbols
+            .filter(symbol => symbol.toLowerCase().includes(searchTerm))
+            .map(symbol => ({
+                symbol,
+                name: getSymbolName(symbol),
+                price: getMockPrice(symbol),
+                available: 0
+            }))
+    } else {
+        // For sell: only show user's holdings that match search
+        filteredSymbols.value = userHoldings.value
+            .filter(h => 
+                h.symbol.toLowerCase().includes(searchTerm) && 
+                h.available > 0
+            )
+            .map(h => ({
+                symbol: h.symbol,
+                name: getSymbolName(h.symbol),
+                price: h.current_price,
+                available: h.available
+            }))
+    }
+    
+    showSymbolDropdown.value = filteredSymbols.value.length > 0
+}
+
+const selectSymbol = (symbol) => {
+    form.symbol = symbol.symbol
+    form.price = symbol.price
+    marketPrice.value = symbol.price
+    showSymbolDropdown.value = false
+    validateQuantity()
+}
+
+const adjustQuantity = (amount) => {
+    form.quantity = parseFloat((parseFloat(form.quantity) + amount).toFixed(8))
+    validateQuantity()
+}
+
+const validateQuantity = () => {
+    quantityError.value = ''
+    
+    if (form.quantity <= 0) {
+        quantityError.value = 'Quantity must be greater than 0'
+        return
+    }
+    
+    if (form.type === 'sell') {
+        const symbolData = selectedSymbolData.value
+        if (symbolData && form.quantity > symbolData.available) {
+            quantityError.value = `Maximum available: ${formatAmount(symbolData.available)}`
         }
     }
+    
+    if (form.type === 'buy') {
+        if (totalAmount.value > availableBalance.value) {
+            quantityError.value = 'Insufficient balance'
+        }
+    }
+}
+
+const updateMarketPrice = () => {
+    // Fetch current market price for selected symbol
+    if (form.symbol) {
+        marketPrice.value = getMockPrice(form.symbol)
+        form.price = marketPrice.value
+    }
+}
+
+const formatPrice = (price) => {
+    if (!price) return '0.00'
+    if (price < 1) return price.toFixed(6)
+    if (price < 1000) return price.toFixed(2)
+    return price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const formatAmount = (amount) => {
+    if (!amount) return '0.00'
+    if (amount < 0.000001) return amount.toFixed(12)
+    if (amount < 0.001) return amount.toFixed(8)
+    if (amount < 1) return amount.toFixed(6)
+    if (amount < 1000) return amount.toFixed(2)
+    return amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 const placeOrder = async () => {
@@ -260,32 +489,63 @@ const placeOrder = async () => {
     showStatus('info', 'Placing order...')
 
     try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1500))
+        const orderData = {
+            symbol: form.symbol,
+            side: form.type.toUpperCase(),
+            price: parseFloat(form.price),
+            amount: parseFloat(form.quantity),
+            // Note: fee calculation is done client-side for display only
+            // The backend will handle actual fee calculation and balance updates
+        }
+
+        const response = await axios.post('/api/orders', orderData)
         
-        // Mock order response
-        const orderId = Math.floor(Math.random() * 1000000)
-        
-        showStatus('success', `Order #${orderId} placed successfully!`)
-        
-        // Reset form after successful order (keep symbol)
-        const currentSymbol = form.symbol
-        Object.assign(form, {
-            symbol: currentSymbol,
-            type: 'buy',
-            quantity: 0.1,
-            price: marketPrice.value,
-            orderType: 'limit',
-            timeInForce: 'gtc',
-            postOnly: false
-        })
+        if (response.data.success) {
+            // Show success toast
+            showStatus('success', `Order #${response.data.order.id} placed successfully!`)
+            
+            // Show order summary
+            const order = response.data.order
+            const toastMessage = `
+                ${order.side === 'BUY' ? '🟢 Buy' : '🔴 Sell'} Order Placed
+                Symbol: ${order.symbol}
+                Quantity: ${formatAmount(order.amount)}
+                Price: $${formatPrice(order.price)}
+                Total: $${formatPrice(order.amount * order.price)}
+                Status: ${order.status_text}
+            `
+            
+            // You can trigger a toast notification here
+            // For now, we'll just show in the form status
+            showStatus('success', toastMessage)
+            
+            // Reset form
+            resetForm()
+            
+            // Refresh user data
+            await Promise.all([
+                fetchUserHoldings(),
+                fetchAvailableBalance()
+            ])
+        } else {
+            showStatus('error', response.data.message || 'Failed to place order')
+        }
         
     } catch (error) {
         console.error('Order error:', error)
-        showStatus('error', 'Failed to place order. Please try again.')
+        const errorMessage = error.response?.data?.message || 'Failed to place order. Please try again.'
+        showStatus('error', errorMessage)
     } finally {
         isSubmitting.value = false
     }
+}
+
+const resetForm = () => {
+    const defaultSymbol = form.type === 'buy' ? 'BTC' : (quickSymbols.value[0]?.symbol || '')
+    form.symbol = defaultSymbol
+    form.quantity = 0.1
+    updateMarketPrice()
+    quantityError.value = ''
 }
 
 const showStatus = (type, message) => {
@@ -307,15 +567,36 @@ const showStatus = (type, message) => {
     }, 5000)
 }
 
-// Watch for symbol changes to update price
+// Watch for changes
 watch(() => form.symbol, (newSymbol) => {
     if (newSymbol) {
-        searchSymbol()
+        updateMarketPrice()
+        validateQuantity()
     }
 })
 
+watch(() => form.quantity, () => {
+    validateQuantity()
+})
+
+watch(() => form.price, () => {
+    validateQuantity()
+})
+
+watch(() => form.type, () => {
+    // When order type changes, update quick symbols and reset form
+    resetForm()
+    searchSymbols()
+})
+
 // Initialize
-searchSymbol()
+onMounted(async () => {
+    await Promise.all([
+        fetchUserHoldings(),
+        fetchAvailableBalance()
+    ])
+    resetForm()
+})
 </script>
 
 <style scoped>
@@ -355,7 +636,7 @@ searchSymbol()
     font-size: 14px;
 }
 
-/* Quick Tickers */
+/* Quick Symbols */
 .quick-tickers {
     padding: 16px 24px;
     border-bottom: 1px solid #f3f4f6;
@@ -365,15 +646,18 @@ searchSymbol()
 }
 
 .ticker-btn {
-    padding: 8px 16px;
+    padding: 10px 16px;
     border: 1px solid #d1d5db;
-    border-radius: 6px;
+    border-radius: 8px;
     background: white;
     color: #374151;
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
 
 .ticker-btn:hover {
@@ -385,6 +669,15 @@ searchSymbol()
     background: #482e92;
     color: white;
     border-color: #482e92;
+}
+
+.ticker-btn.active .symbol {
+    font-weight: 600;
+}
+
+.holding-amount {
+    font-size: 12px;
+    opacity: 0.9;
 }
 
 /* Order Form Content */
@@ -401,6 +694,7 @@ searchSymbol()
     display: flex;
     flex-direction: column;
     gap: 8px;
+    position: relative;
 }
 
 .form-label {
@@ -416,6 +710,12 @@ searchSymbol()
     font-size: 12px;
     color: #6b7280;
     font-weight: 400;
+}
+
+.available-label {
+    font-size: 12px;
+    color: #059669;
+    font-weight: 500;
 }
 
 /* Symbol Input */
@@ -454,6 +754,45 @@ searchSymbol()
     border-color: #9ca3af;
 }
 
+/* Symbol Dropdown */
+.symbol-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-top: 4px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.dropdown-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.dropdown-item:hover {
+    background-color: #f9fafb;
+}
+
+.dropdown-item .symbol {
+    font-weight: 600;
+    color: #111827;
+}
+
+.dropdown-item .available {
+    font-size: 12px;
+    color: #6b7280;
+}
+
 /* Order Type Selector */
 .order-type-selector {
     display: flex;
@@ -485,16 +824,24 @@ searchSymbol()
     border-width: 2px;
 }
 
-.type-btn.active.buy {
-    background: #d1fae5;
+.buy-btn {
     border-color: #10b981;
-    color: #065f46;
 }
 
-.type-btn.active.sell {
-    background: #fee2e2;
+.buy-btn.active {
+    background: #10b981;
+    color: white;
+    border-color: #10b981;
+}
+
+.sell-btn {
     border-color: #ef4444;
-    color: #991b1b;
+}
+
+.sell-btn.active {
+    background: #ef4444;
+    color: white;
+    border-color: #ef4444;
 }
 
 /* Form Row */
@@ -540,6 +887,19 @@ searchSymbol()
     border-color: #9ca3af;
 }
 
+/* Error Message */
+.error-message {
+    font-size: 12px;
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.error-message i {
+    font-size: 14px;
+}
+
 /* Order Summary */
 .order-summary {
     background: #f9fafb;
@@ -559,9 +919,20 @@ searchSymbol()
     border-bottom: 1px solid #e5e7eb;
 }
 
+.summary-item.total {
+    padding-top: 12px;
+    margin-top: 4px;
+    border-top: 2px solid #e5e7eb;
+}
+
 .summary-label {
     font-size: 14px;
     color: #6b7280;
+}
+
+.summary-item.total .summary-label {
+    font-weight: 600;
+    color: #111827;
 }
 
 .summary-value {
@@ -570,73 +941,9 @@ searchSymbol()
     color: #111827;
 }
 
-/* Advanced Options */
-.advanced-options {
-    border-top: 1px solid #e5e7eb;
-    padding-top: 16px;
-}
-
-.advanced-toggle {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: white;
-    color: #374151;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: all 0.2s;
-}
-
-.advanced-toggle:hover {
-    background: #f3f4f6;
-    border-color: #9ca3af;
-}
-
-.advanced-content {
-    margin-top: 16px;
-    padding: 16px;
-    background: #f9fafb;
-    border-radius: 8px;
-    border: 1px solid #e5e7eb;
-}
-
-.form-select {
-    padding: 12px 16px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: white;
-    color: #374151;
-    font-size: 14px;
-    width: 100%;
-    cursor: pointer;
-}
-
-.form-select:focus {
-    outline: none;
-    border-color: #482e92;
-}
-
-.checkbox-label {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    color: #374151;
-}
-
-.checkbox {
-    width: 16px;
-    height: 16px;
-    border-radius: 4px;
-    border: 1px solid #d1d5db;
-    cursor: pointer;
+.summary-item.total .summary-value {
+    font-size: 18px;
+    color: #482e92;
 }
 
 /* Submit Button */

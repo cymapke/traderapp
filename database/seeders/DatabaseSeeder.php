@@ -29,6 +29,16 @@ class DatabaseSeeder extends Seeder
         //Assets
         $this->call([
             AssetSeeder::class,
+        ]);
+        
+        //Orders
+        $this->call([
+            OrderSeeder::class,
+        ]);
+
+        //Trades
+        $this->call([
+            TradeSeeder::class,
         ]);        
     }
 }

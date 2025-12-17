@@ -4,45 +4,78 @@ import Pusher from 'pusher-js';
 
 window.Pusher = Pusher;
 
-// Get CSRF token safely
-function getCsrfToken() {
-    // Method 1: Try to get from meta tag (if exists)
-    const metaTag = document.querySelector('meta[name="csrf-token"]');
-    if (metaTag) {
-        return metaTag.getAttribute('content');
-    }
-
-    // Method 2: Try to get from cookie (Laravel default)
-    const cookieValue = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('XSRF-TOKEN='));
-
-    if (cookieValue) {
-        return decodeURIComponent(cookieValue.split('=')[1]);
-    }
-
-    // Method 3: Return null/empty string if not found
-    console.warn('CSRF token not found. WebSocket authentication may fail.');
-    return '';
-}
-
-// Get authentication token
+// Get authentication token safely
 function getAuthToken() {
-    // Get from localStorage, sessionStorage, or wherever you store it
-    return localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+    return localStorage.getItem('token') || '';
 }
 
-// Initialize Echo
-window.Echo = new Echo({
-    broadcaster: 'pusher',
-    key: import.meta.env.VITE_PUSHER_APP_KEY,
-    cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER || 'mt1',
-    forceTLS: true,
-    authEndpoint: '/broadcasting/auth',
-    auth: {
-        headers: {
-            'Authorization': `Bearer ${getAuthToken()}`,
-            'X-CSRF-TOKEN': getCsrfToken(),
-        }
+// Get CSRF token safely (if needed)
+function getCsrfToken() {
+    const metaTag = document.querySelector('meta[name="csrf-token"]');
+    return metaTag ? metaTag.content : '';
+}
+
+// Initialize Echo only if we have a token
+const initEcho = () => {
+    const token = getAuthToken();
+
+    if (!token) {
+        console.warn('No authentication token found for Echo');
+        return null;
     }
-});
+
+    try {
+        const echo = new Echo({
+            broadcaster: 'pusher',
+            key: import.meta.env.VITE_PUSHER_APP_KEY || 'dummy_key',
+            cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER || 'mt1',
+            forceTLS: true,
+            authEndpoint: '/broadcasting/auth',
+            auth: {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json',
+                    // Only include X-CSRF-TOKEN if you're using session auth
+                    // 'X-CSRF-TOKEN': getCsrfToken(),
+                }
+            },
+            // Add these options to avoid 405 errors
+            auth: {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                }
+            },
+            authorizer: (channel, options) => {
+                return {
+                    authorize: (socketId, callback) => {
+                        // Use GET request instead of POST
+                        axios.get('/broadcasting/auth', {
+                            params: {
+                                socket_id: socketId,
+                                channel_name: channel.name
+                            },
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Accept': 'application/json'
+                            }
+                        })
+                            .then(response => {
+                                callback(false, response.data);
+                            })
+                            .catch(error => {
+                                callback(true, error);
+                            });
+                    }
+                };
+            }
+        });
+
+        return echo;
+    } catch (error) {
+        console.error('Failed to initialize Echo:', error);
+        return null;
+    }
+};
+
+// Export initialized Echo instance
+window.Echo = initEcho();

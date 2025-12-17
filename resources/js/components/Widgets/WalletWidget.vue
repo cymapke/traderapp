@@ -4,7 +4,7 @@
     <div class="widget-header">
       <div class="header-left">
         <span class="icon">💰</span>
-        <h3>Wallet Balance</h3>
+        <h3>Portfolio Balances</h3>
       </div>
       <button 
         @click="refreshProfile" 
