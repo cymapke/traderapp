@@ -7,14 +7,14 @@ Clone repository
 cd to project root
 
 Backend:
-composer install
-cp .env.example .env
-Edit .env: set DB credentials, APP_URL=http://localhost:8000
-php artisan key:generate
-php artisan jwt:secret
-Create database: mysql -u root -p -e "CREATE DATABASE crypto_trading;"
-php artisan migrate
-php artisan serve --port=8000
+ - composer install
+ - cp .env.example .env
+ - Edit .env: set DB credentials, APP_URL=http://localhost:8000
+ - php artisan key:generate
+ - php artisan jwt:secret
+ - Create database: mysql -u root -p -e "CREATE DATABASE crypto_trading;"
+ - php artisan migrate
+ - php artisan serve --port=8000
 
 Frontend:
 npm install
