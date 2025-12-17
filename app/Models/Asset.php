@@ -183,4 +183,20 @@ class Asset extends Model
             ['amount' => 0, 'locked_amount' => 0]
         );
     }
+
+    /**
+     * The "booted" method of the model.
+     */
+    protected static function booted()
+    {
+        static::saved(function ($asset) {
+            // Broadcast profile update when asset changes
+            $asset->user->broadcastProfileUpdate();
+        });
+
+        static::deleted(function ($asset) {
+            // Broadcast profile update when asset is deleted
+            $asset->user->broadcastProfileUpdate();
+        });
+    }    
 }

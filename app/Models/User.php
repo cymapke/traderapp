@@ -109,5 +109,99 @@ class User extends Authenticatable
             // $total += $asset->amount * $price;
         }
         return $total;
+    }
+    
+// Get cash balance in USD
+    public function getCashBalance(): float
+    {
+        return $this->balance;
+    }
+
+    // Get total value of all assets (amount * price)
+    public function getAssetsValue(): float
+    {
+        $total = 0;
+        
+        foreach ($this->assets as $asset) {
+            $ticker = $asset->ticker;
+            if ($ticker && $ticker->type === 'crypto') {
+                $price = $ticker->getPrice();
+                $total += $asset->amount * $price;
+            }
+        }
+        
+        return $total;
+    }
+
+    // Get total value of locked assets (locked_amount * price)
+    public function getLockedAssetsValue(): float
+    {
+        $total = 0;
+        
+        foreach ($this->assets as $asset) {
+            $ticker = $asset->ticker;
+            if ($ticker && $ticker->type === 'crypto' && $asset->locked_amount > 0) {
+                $price = $ticker->getPrice();
+                $total += $asset->locked_amount * $price;
+            }
+        }
+        
+        return $total;
+    }
+
+    // Get available assets value (total - locked)
+    public function getAvailableAssetsValue(): float
+    {
+        return $this->getAssetsValue() - $this->getLockedAssetsValue();
+    }
+
+    // Get total balance (cash + all assets)
+    public function getTotalBalance(): float
+    {
+        return $this->getCashBalance() + $this->getAssetsValue();
+    }
+
+    // Get percentage of available assets vs total portfolio
+    public function getAvailableAssetsPercentage(): float
+    {
+        $totalPortfolio = $this->getTotalBalance();
+        
+        if ($totalPortfolio == 0) {
+            return 0;
+        }
+        
+        $availableValue = $this->getAvailableAssetsValue();
+        return ($availableValue / $totalPortfolio) * 100;
+    }
+
+    // Get complete profile data for widget
+    public function getProfileData(): array
+    {
+        $cashBalance = $this->getCashBalance();
+        $assetsValue = $this->getAssetsValue();
+        $lockedValue = $this->getLockedAssetsValue();
+        $totalBalance = $this->getTotalBalance();
+        $availablePercentage = $this->getAvailableAssetsPercentage();
+        
+        return [
+            'cash_balance' => round($cashBalance, 2),
+            'assets_value' => round($assetsValue, 2),
+            'locked_assets_value' => round($lockedValue, 2),
+            'total_balance' => round($totalBalance, 2),
+            'available_percentage' => round($availablePercentage, 1),
+            'formatted' => [
+                'cash_balance' => '$' . number_format($cashBalance, 2),
+                'assets_value' => '$' . number_format($assetsValue, 2),
+                'locked_assets_value' => '$' . number_format($lockedValue, 2),
+                'total_balance' => '$' . number_format($totalBalance, 2),
+                'available_percentage' => number_format($availablePercentage, 1) . '%',
+            ]
+        ];
+    }
+
+    // Broadcast profile update via Pusher
+    public function broadcastProfileUpdate(): void
+    {
+        event(new \App\Events\ProfileUpdated($this));
     }    
 }
